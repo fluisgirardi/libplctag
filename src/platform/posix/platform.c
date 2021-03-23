@@ -1217,12 +1217,13 @@ extern int socket_close(sock_p s)
         return PLCTAG_STATUS_OK;
     }
 
-    if(!close(s->fd)) {
+    s->is_open = 0;
+
+    if(close(s->fd)) {
         return PLCTAG_ERR_CLOSE;
     }
 
     s->fd = 0;
-    s->is_open = 0;
 
     return PLCTAG_STATUS_OK;
 }
@@ -1277,7 +1278,7 @@ int sleep_ms(int ms)
     }
 
     wait_time.tv_sec = ms/1000;
-    wait_time.tv_nsec = ((int64_t)ms % 1000)*1000000; /* convert to nanoseconds */
+    wait_time.tv_nsec = ((long)ms % 1000)*1000000; /* convert to nanoseconds */
 
     do {
         int rc = nanosleep(&wait_time, &remainder);

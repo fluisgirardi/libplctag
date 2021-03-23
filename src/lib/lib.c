@@ -1550,12 +1550,15 @@ LIB_EXPORT int plc_tag_get_int_attribute(int32_t id, const char *attrib_name, in
                 /* FIXME - what happens if this overflows? */
                 tag->status = PLCTAG_STATUS_OK;
                 res = (int)tag->read_cache_ms;
-            }  else if(str_cmp_i(attrib_name, "auto_sync_read_ms") == 0) {
+            } else if(str_cmp_i(attrib_name, "auto_sync_read_ms") == 0) {
                 tag->status = PLCTAG_STATUS_OK;
                 res = (int)tag->auto_sync_read_ms;
-            }  else if(str_cmp_i(attrib_name, "auto_sync_write_ms") == 0) {
+            } else if(str_cmp_i(attrib_name, "auto_sync_write_ms") == 0) {
                 tag->status = PLCTAG_STATUS_OK;
                 res = (int)tag->auto_sync_write_ms;
+            } else if(str_cmp_i(attrib_name, "bit_num") == 0) {
+                tag->status = PLCTAG_STATUS_OK;
+                res = (int)(unsigned int)(tag->bit);
             } else  {
                 if(tag->vtable->get_int_attrib) {
                     res = tag->vtable->get_int_attrib(tag, attrib_name, default_value);
@@ -2020,6 +2023,7 @@ LIB_EXPORT int plc_tag_set_int64(int32_t id, int offset, int64_t ival)
     return rc;
 }
 
+<<<<<<< HEAD
 
 LIB_EXPORT int plc_tag_set_block(int32_t id, int offset, uint8_t *block, int blocksize)
 {
@@ -2137,7 +2141,6 @@ LIB_EXPORT int plc_tag_get_block(int32_t id, int offset, uint8_t *buffer, int bu
 
     return rc;
 }
-
 
 LIB_EXPORT uint32_t plc_tag_get_uint32(int32_t id, int offset)
 {
@@ -3341,6 +3344,7 @@ LIB_EXPORT int plc_tag_get_string_total_length(int32_t id, int string_start_offs
     critical_block(tag->api_mutex) {
         total_length = (int)(tag->byte_order->str_count_word_bytes)
                      + (tag->byte_order->str_is_fixed_length ? (int)(tag->byte_order->str_max_capacity) : get_string_length_unsafe(tag, string_start_offset))
+                     + (tag->byte_order->str_is_zero_terminated ? (int)1 : (int)0)
                      + (int)(tag->byte_order->str_pad_bytes);
     }
 
@@ -3349,6 +3353,125 @@ LIB_EXPORT int plc_tag_get_string_total_length(int32_t id, int string_start_offs
     pdebug(DEBUG_SPEW, "Done.");
 
     return total_length;
+}
+
+
+
+LIB_EXPORT int plc_tag_set_raw_bytes(int32_t id, int offset, uint8_t *buffer, int buffer_size)
+{
+    int rc = PLCTAG_STATUS_OK;
+    plc_tag_p tag = lookup_tag(id);
+
+    pdebug(DEBUG_SPEW, "Starting.");
+
+    if(!tag) {
+        pdebug(DEBUG_WARN,"Tag not found.");
+        return PLCTAG_ERR_NOT_FOUND;
+    }
+
+    /* is there data? */
+    if(!tag->data) {
+        rc_dec(tag);
+        pdebug(DEBUG_WARN,"Tag has no data!");
+        tag->status = PLCTAG_ERR_NO_DATA;
+        return PLCTAG_ERR_NO_DATA;
+    }
+
+    if(!buffer) {
+        pdebug(DEBUG_WARN,"Buffer is null!");
+        return PLCTAG_ERR_NULL_PTR;
+    }
+
+    if(buffer_size <= 0) {
+        pdebug(DEBUG_WARN,"The buffer must have some capacity for data.");
+        return PLCTAG_ERR_BAD_PARAM;
+    }
+
+    if(!tag->is_bit) {
+        critical_block(tag->api_mutex) {
+            if((offset >= 0) && ((offset + buffer_size) <= tag->size)) {
+                if(tag->auto_sync_write_ms > 0) {
+                    tag->tag_is_dirty = 1;
+                }
+
+                int i;
+                for (i=0;i<buffer_size;i++) {
+                    tag->data[offset + i] = buffer[i];
+                }
+
+                tag->status = PLCTAG_STATUS_OK;
+            } else {
+                pdebug(DEBUG_WARN, "Data offset out of bounds!");
+                tag->status = PLCTAG_ERR_OUT_OF_BOUNDS;
+                rc = PLCTAG_ERR_OUT_OF_BOUNDS;
+            }
+        }
+    } else {
+        pdebug(DEBUG_WARN,"Trying to write a list of value on a Tag bit.");
+        tag->status = PLCTAG_ERR_UNSUPPORTED;
+        rc=PLCTAG_ERR_UNSUPPORTED;
+    }
+
+    rc_dec(tag);
+
+    return rc;
+}
+
+
+LIB_EXPORT int plc_tag_get_raw_bytes(int32_t id, int offset, uint8_t *buffer, int buffer_size)
+{
+    int rc = PLCTAG_STATUS_OK;
+    plc_tag_p tag = lookup_tag(id);
+
+    pdebug(DEBUG_SPEW, "Starting.");
+
+    if(!tag) {
+        pdebug(DEBUG_WARN,"Tag not found.");
+        return PLCTAG_ERR_NOT_FOUND;
+    }
+
+    /* is there data? */
+    if(!tag->data) {
+        rc_dec(tag);
+        pdebug(DEBUG_WARN,"Tag has no data!");
+        tag->status = PLCTAG_ERR_NO_DATA;
+        return PLCTAG_ERR_NO_DATA;
+    }
+
+    if(!buffer) {
+        pdebug(DEBUG_WARN,"Buffer is null!");
+        return PLCTAG_ERR_NULL_PTR;
+    }
+
+    if(buffer_size <= 0) {
+        pdebug(DEBUG_WARN,"The buffer must have some capacity for data.");
+        return PLCTAG_ERR_BAD_PARAM;
+    }
+
+    if(!tag->is_bit) {
+        critical_block(tag->api_mutex) {
+            if((offset >= 0) && ((offset + buffer_size) <= tag->size)) {
+                int i;
+                for (i=0;i<buffer_size;i++) {
+                    buffer[i] = tag->data[offset + i];
+                }
+
+                tag->status = PLCTAG_STATUS_OK;
+            } else {
+                pdebug(DEBUG_WARN, "Data offset out of bounds!");
+                tag->status = PLCTAG_ERR_OUT_OF_BOUNDS;
+                rc = PLCTAG_ERR_OUT_OF_BOUNDS;
+            }
+        }
+    } else {
+        pdebug(DEBUG_WARN,"Trying to read a list of values from a Tag bit.");
+        tag->status = PLCTAG_ERR_UNSUPPORTED;
+        rc = PLCTAG_ERR_UNSUPPORTED;
+    }
+
+    rc_dec(tag);
+
+    return rc;
 }
 
 
